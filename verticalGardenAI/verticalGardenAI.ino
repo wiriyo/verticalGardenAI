@@ -31,7 +31,7 @@ const char* WIFI_PASS = "0945639334";
 const char* MQTT_BROKER = "192.168.0.120";     // Pi4 local (Tailscale if remote)
 const uint16_t MQTT_PORT = 1883;
 const char* MQTT_CLIENT_ID = "verticalgarden-esp32";
-const char* MQTT_TOPIC_PREFIX = "sensor/verticalgarden";
+const char* MQTT_TOPIC_PREFIX = "sensor/light";
 
 // ===== OTA =====
 const char* OTA_HOSTNAME = "verticalgarden-esp32";
