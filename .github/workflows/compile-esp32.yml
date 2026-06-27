@@ -1,0 +1,68 @@
+name: Compile ESP32 Firmware
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'firmware/**'
+  workflow_dispatch:
+
+env:
+  ESP32_BOARD: esp32:esp32:esp32
+  INO_PATH: ./firmware/verticalGardenAI.ino
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
+          arduino-cli version
+
+      - name: Update core index & install ESP32
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install required libraries
+        run: |
+          arduino-cli lib install "BH1750"
+          arduino-cli lib install "PubSubClient"
+          arduino-cli lib install "ArduinoJson"
+          arduino-cli lib install "Adafruit Unified Sensor"
+          arduino-cli lib install "DHT sensor library"
+          echo "✅ Libraries installed"
+
+      - name: Compile firmware
+        id: compile
+        run: |
+          arduino-cli compile --fqbn ${{ env.ESP32_BOARD }} \
+            --output-dir ./build \
+            ${{ env.INO_PATH }}
+          echo "firmware_file=$(ls ./build/*.bin | head -1)" >> $GITHUB_OUTPUT
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-firmware
+          path: ./build/*.bin
+          retention-days: 30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: v${{ github.run_number }}
+          name: "Firmware v${{ github.run_number }}"
+          body: |
+            ## Firmware Release v${{ github.run_number }}
+            - ✅ Compiled from commit: ${{ github.sha }}
+            - 📅 Build date: ${{ github.event.head_commit.timestamp }}
+            - 🔧 Board: ESP32 (${{ env.ESP32_BOARD }})
+          files: |
+            build/*.bin
+          generate_release_notes: false
