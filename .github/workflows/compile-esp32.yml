@@ -4,12 +4,13 @@ on:
   push:
     branches: [ main, master ]
     paths:
-      - 'firmware/**'
+      - 'verticalGardenAI/**'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 env:
   ESP32_BOARD: esp32:esp32:esp32
-  INO_PATH: ./firmware/verticalGardenAI.ino
+  SKETCH_PATH: ./verticalGardenAI
 
 jobs:
   compile:
@@ -21,9 +22,14 @@ jobs:
       - name: Install arduino-cli
         run: |
           curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
+          arduino-cli config init
           arduino-cli version
 
-      - name: Update core index & install ESP32
+      - name: Add ESP32 board URL
+        run: |
+          arduino-cli config set board_manager.additional_urls "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
+
+      - name: Update core index & install ESP32 core
         run: |
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
@@ -33,20 +39,28 @@ jobs:
           arduino-cli lib install "BH1750"
           arduino-cli lib install "PubSubClient"
           arduino-cli lib install "ArduinoJson"
-          arduino-cli lib install "Adafruit Unified Sensor"
-          arduino-cli lib install "DHT sensor library"
           echo "✅ Libraries installed"
 
       - name: Compile firmware
         id: compile
+        continue-on-error: true
         run: |
           arduino-cli compile --fqbn ${{ env.ESP32_BOARD }} \
             --output-dir ./build \
-            ${{ env.INO_PATH }}
-          echo "firmware_file=$(ls ./build/*.bin | head -1)" >> $GITHUB_OUTPUT
+            ${{ env.SKETCH_PATH }} 2>&1
+
+      - name: Check compile result
+        if: steps.compile.outcome == 'failure'
+        run: |
+          echo "::error::Compilation failed! Check the logs above."
+          exit 1
+
+      - name: List build output
+        run: ls -la ./build/
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
+        if: steps.compile.outcome == 'success'
         with:
           name: esp32-firmware
           path: ./build/*.bin
@@ -54,14 +68,14 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && steps.compile.outcome == 'success'
         with:
           tag_name: v${{ github.run_number }}
           name: "Firmware v${{ github.run_number }}"
           body: |
             ## Firmware Release v${{ github.run_number }}
             - ✅ Compiled from commit: ${{ github.sha }}
-            - 📅 Build date: ${{ github.event.head_commit.timestamp }}
+            - 📅 Auto-build by GitHub Actions
             - 🔧 Board: ESP32 (${{ env.ESP32_BOARD }})
           files: |
             build/*.bin
