@@ -8,6 +8,9 @@ on:
       - '.github/workflows/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   ESP32_BOARD: esp32:esp32:esp32
   SKETCH_PATH: ./verticalGardenAI
@@ -42,25 +45,16 @@ jobs:
           echo "✅ Libraries installed"
 
       - name: Compile firmware
-        id: compile
-        continue-on-error: true
         run: |
           arduino-cli compile --fqbn ${{ env.ESP32_BOARD }} \
             --output-dir ./build \
             ${{ env.SKETCH_PATH }} 2>&1
-
-      - name: Check compile result
-        if: steps.compile.outcome == 'failure'
-        run: |
-          echo "::error::Compilation failed! Check the logs above."
-          exit 1
 
       - name: List build output
         run: ls -la ./build/
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
-        if: steps.compile.outcome == 'success'
         with:
           name: esp32-firmware
           path: ./build/*.bin
@@ -68,7 +62,7 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/main' && steps.compile.outcome == 'success'
+        if: github.ref == 'refs/heads/main'
         with:
           tag_name: v${{ github.run_number }}
           name: "Firmware v${{ github.run_number }}"
